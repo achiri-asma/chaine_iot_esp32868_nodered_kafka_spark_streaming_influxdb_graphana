@@ -1,0 +1,43 @@
+1- Run the main.cpp (TP02)
+
+2- Run docker's containers IOT STACK TUTORIAL MAIN : docker-compose up -d
+
+3- access to : http://localhost:1880 (nodred)
+
+4- In kafka we need to create topic : sensor_temp : kafka-topics.sh --create --topic sensor_temp --bootstrap-server lhttp://localhost:9092 --partitions 0 --replication-factor 1
+
+5- In influxdb , we need to : 
+ - influx -username 'change' -password 'this' 
+
+ - SHOW DATABASES /OR/ CREATE DATABASE DBTWO
+
+ - USE DBTWO
+
+ - SHOW MEASUREMENTS
+
+ - SELECT * FROM sensor_data
+
+6- we create spark's code and link it  with influxdb to treat the stocked data
+- docker cp C:/Users/ABTT/Desktop/syrine/iot_pro/iot_pro/IoT-Stack-tutorial-main/spark_kafka/spark_temperature_consumer.py spark-master:/data/spark_temperature_consumer.py
+
+- to run it : 
+    $ cd /data
+    $ spark-submit /data/spark_temperature_consumer.py
+      spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.3 spark_temperature_consumer.py
+
+7- we display th results on graphana after established the connexion
+
+
+ 
+
+
+
+docker run -it -v ~/.ivy2:/root/.ivy2 bitnami/spark:latest /bin/bash
+
+docker exec -it nodered sh
+~ $ cat /data/input.json
+
+spark-submit /data/spark_temperature_consumer.py
+
+C:\Users\ABTT\Desktop\syrine\iot_pro\iot_pro\IoT-Stack-tutorial-main\spark_kafka>docker cp C:/Users/ABTT/Desktop/syrine/iot_pro/iot_pro/IoT-Stack-tutorial-main/spark_kafka/spark_temperature_consumer.py spark-master:/data/spark_temperature_consumer.py
+Successfully copied 3.07kB to spark-master:/data/spark_temperature_consumer.py

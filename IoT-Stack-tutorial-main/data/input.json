@@ -1,0 +1,36 @@
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import from_json, col
+from pyspark.sql.types import StructType, StructField, StringType, DoubleType
+
+# Initialize the Spark session
+spark = SparkSession.builder \
+    .appName("FileTemperatureConsumer") \
+    .getOrCreate()
+
+spark.sparkContext.setLogLevel("WARN")
+
+# Define the schema of the incoming JSON data
+schema = StructType([
+    StructField("val", DoubleType(), True),  # Temperature value
+    StructField("etat", StringType(), True)  # State (e.g., 'high')
+])
+
+# Read the streaming data from the directory /data
+# This will process any JSON file placed in the /data folder inside the Spark container
+df = spark.readStream \
+    .schema(schema) \
+    .json("/data")  # /data is the directory where input.json will be written by Node-RED
+
+# Perform real-time processing: calculate average temperature
+aggregated_df = df.groupBy("etat") \
+                  .avg("val") \
+                  .withColumnRenamed("avg(val)", "avg_temperature")
+
+# Output the result to the console for debugging/monitoring
+query = aggregated_df.writeStream \
+    .outputMode("update") \
+    .format("console") \
+    .start()
+
+# Wait for the streaming job to finish
+query.awaitTermination()

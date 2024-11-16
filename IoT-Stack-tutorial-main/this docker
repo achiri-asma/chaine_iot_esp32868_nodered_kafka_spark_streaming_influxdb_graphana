@@ -1,0 +1,180 @@
+version: "3.7"
+
+services:
+  # Node-RED service (Kafka Consumer)
+  nodered: 
+    build: ./nodered
+    image: localbuild/nodered:april2021
+    container_name: nodered
+    restart: unless-stopped
+    ports: 
+      - "1880:1880"   # Node-RED Web UI
+    volumes:
+      - noderedData:/data   # Persist Node-RED data
+    depends_on:
+      - kafka
+      - spark-master   # Fixed: depends on 'spark-master' instead of 'spark'
+      - spark-worker   # Optional: if you want to depend on both the master and worker nodes
+    networks:
+      - edge
+
+  # Grafana service
+  grafana:
+    build: ./grafana
+    image: localbuild/grafana:april2021
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"   # Grafana Web UI
+    volumes: 
+      - grafanaData:/var/lib/grafana  # Persist Grafana data
+    networks:
+      - edge
+
+  # InfluxDB service
+  influxdb:
+    build: ./influx
+    image: localbuild/influxdb:april2021
+    container_name: influxdb
+    restart: unless-stopped
+    environment:
+      INFLUXDB_HTTP_READ_TIMEOUT: "10s"
+      INFLUXDB_HTTP_WRITE_TIMEOUT: "10s"
+      INFLUXDB_QUERY_TIMEOUT: "30s"
+      INFLUXDB_DB: DBTWO
+      INFLUXDB_HTTP_AUTH_ENABLED: "true"
+      INFLUXDB_ADMIN_USER: change
+      INFLUXDB_ADMIN_PASSWORD: this
+      INFLUXDB_USER: and_change
+      INFLUXDB_USER_PASSWORD: this_too
+    ports:
+      - "8082:8082"
+      - "8086:8086"
+      - "8089:8089"
+    volumes:
+      - influxData:/var/lib/influxdb
+    networks: 
+      - edge
+
+  # ksqlDB service
+  ksqldb-server:
+    image: confluentinc/ksqldb-server:latest
+    container_name: ksqldb-server
+    restart: unless-stopped
+    environment:
+      - KSQL_LISTENER_HTTP_PORT=8088
+      - KSQL_KSQL_SERVICE_ID=ksqldb-service
+      - KSQL_KSQL_SCHEMA_REGISTRY_URL=http://schema-registry:8081  # Optional if you're using schema registry
+      - KSQL_KSQL_BOOTSTRAP_SERVERS=kafka:9092
+    ports:
+      - "8088:8088"  # ksqlDB HTTP Port
+    depends_on:
+      - kafka
+    networks:
+      - edge
+
+  # ksqlDB CLI (Optional, if you need access to the ksqlDB command line interface)
+  ksqldb-cli:
+    image: confluentinc/cp-ksqldb-cli:latest
+    container_name: ksqldb-cli
+    restart: unless-stopped
+    entrypoint: "/bin/bash"
+    depends_on:
+      - ksqldb-server
+    networks:
+      - edge    
+
+  # Mosquitto service (MQTT broker)
+  mosquitto:
+    build: ./mosquitto
+    image: localbuild/mosquitto:april2021
+    container_name: mosquitto
+    restart: unless-stopped
+    ports: 
+      - "8883:1883"  # MQTT Port
+      - "9001:9001"  # MQTT WebSocket Port
+    volumes: 
+      - mosquittoLog:/mosquitto/log  # Persist logs
+      - mosquittoData:/mosquitto/data  # Persist data
+    networks:
+      - edge
+
+  # Zookeeper service (used by Kafka)
+  zookeeper:
+    image: wurstmeister/zookeeper:latest
+    container_name: zookeeper
+    restart: unless-stopped
+    ports:
+      - "2181:2181"  # Zookeeper Port
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - edge
+
+  # Kafka service
+  kafka:
+    image: wurstmeister/kafka:latest
+    container_name: kafka
+    restart: unless-stopped
+    ports:
+      - "9092:9092"  # External Kafka access
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,INSIDE://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,INSIDE://kafka:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_LISTENER_SECURITY_PROTOCOL: PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    volumes:
+      - kafkaData:/var/lib/kafka  # Persist Kafka data
+    networks:
+      - edge
+
+  # Spark Master service
+  spark-master:
+    image: bitnami/spark:latest
+    container_name: spark-master
+    environment:
+      - SPARK_MODE=master
+      - SPARK_MASTER_PORT=7077
+      - SPARK_LOG_LEVEL=WARN
+    ports:
+      - "8080:8080"  # Spark Web UI
+      - "7077:7077"  # Spark Master Port
+    volumes:
+      - ./data:/data  # Mount data folder (to be shared with other services)
+    networks:
+      - edge
+
+  # Spark Worker service
+  spark-worker:
+    image: bitnami/spark:latest
+    container_name: spark-worker
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077  # Connect to Spark Master
+      - SPARK_WORKER_MEMORY=2G
+      - SPARK_WORKER_CORES=2
+      - SPARK_LOG_LEVEL=WARN
+    depends_on:
+      - spark-master
+    networks:
+      - edge
+
+# Create internal link network for Containers
+networks:
+  edge:
+
+# Create Volumes for persistent Storage
+volumes:
+  grafanaData:
+  noderedData:
+  influxData:
+  mosquittoLog:
+  mosquittoData:
+  kafkaData:
+  data:  # Shared volume for storing data across services
